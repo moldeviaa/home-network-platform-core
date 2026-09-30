@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 
-from .manifest import RecoveryError, verify_manifest, write_manifest
+from .manifest import RecoveryError, canonical, verify_manifest, write_manifest
 from .tar_audit import audit_tar
 
 
@@ -21,6 +22,8 @@ def main(argv: list[str] | None = None) -> int:
     verify.add_argument("--filename", default="manifest.json")
     verify.add_argument("--sqlite", action="append", default=[], metavar="RELATIVE_PATH")
     verify.add_argument("--allow-extra", action="store_true")
+    verify.add_argument("--manifest-sha256", metavar="TRUSTED_SHA256",
+                        help="check the manifest against a separately trusted lowercase SHA-256")
     tar = commands.add_parser("tar-audit", help="inspect tar members without extraction")
     tar.add_argument("archive")
     tar.add_argument("--max-members", type=int, default=100_000)
@@ -30,11 +33,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "manifest-create":
             result = write_manifest(args.root, filename=args.filename)
             output = {"created": True, "files": result["file_count"],
-                      "bytes": result["total_bytes"]}
+                      "bytes": result["total_bytes"],
+                      "manifest_sha256": hashlib.sha256(canonical(result)).hexdigest()}
         elif args.command == "manifest-verify":
             output = verify_manifest(args.root, filename=args.filename,
                                      sqlite_names=tuple(args.sqlite),
-                                     strict=not args.allow_extra)
+                                     strict=not args.allow_extra,
+                                     manifest_sha256=args.manifest_sha256)
         else:
             output = audit_tar(args.archive, max_members=args.max_members,
                                max_unpacked_bytes=args.max_unpacked_bytes)

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from home_net_recovery.manifest import (
     RecoveryError, create_manifest, decode_document, verify_manifest,
@@ -61,6 +63,46 @@ class ManifestTests(unittest.TestCase):
     def test_duplicate_json_key_rejected(self):
         with self.assertRaisesRegex(RecoveryError, "duplicate_json_key"):
             decode_document(b'{"a":1,"a":2}\n')
+
+    def test_trusted_pin_rejects_consistently_rewritten_backup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "data").write_bytes(b"original")
+            write_manifest(root)
+            pin = hashlib.sha256((root / "manifest.json").read_bytes()).hexdigest()
+            result = verify_manifest(root, manifest_sha256=pin)
+            self.assertTrue(result["manifest_pin_verified"])
+            self.assertEqual(result["manifest_sha256"], pin)
+            (root / "data").write_bytes(b"replacement")
+            (root / "manifest.json").unlink()
+            write_manifest(root)
+            # Self-consistency alone accepts a complete replacement of both files.
+            self.assertFalse(verify_manifest(root)["manifest_pin_verified"])
+            with self.assertRaisesRegex(RecoveryError, "manifest_pin_mismatch"):
+                verify_manifest(root, manifest_sha256=pin)
+
+    def test_bad_pin_is_rejected_before_artifact_access(self):
+        for pin in (True, "", "g" * 64, "A" * 64, "a" * 63):
+            with self.subTest(pin=pin):
+                with self.assertRaisesRegex(RecoveryError, "manifest_pin_shape"):
+                    verify_manifest(Path("/does/not/exist"), manifest_sha256=pin)
+
+    def test_replaced_manifest_inode_is_rejected_even_with_identical_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_manifest(root)
+            path = root / "manifest.json"
+            original_open = os.open
+            def replace_after_open(target, *args, **kwargs):
+                descriptor = original_open(target, *args, **kwargs)
+                if target == path:
+                    replacement = root / "replacement"
+                    replacement.write_bytes(path.read_bytes())
+                    os.replace(replacement, path)
+                return descriptor
+            with patch("home_net_recovery.manifest.os.open", side_effect=replace_after_open):
+                with self.assertRaisesRegex(RecoveryError, "manifest_changed"):
+                    verify_manifest(root)
 
 
 if __name__ == "__main__":

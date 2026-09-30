@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -165,13 +166,39 @@ def sqlite_integrity(root: Path, names: list[str]) -> None:
             raise RecoveryError("sqlite_integrity") from exc
 
 
+def read_manifest(root: Path, filename: str) -> bytes:
+    """Read one bounded, unchanged regular file without following its final link."""
+    path = safe_file(root, filename)
+    expected = path.lstat()
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    identity = lambda item: (item.st_dev, item.st_ino, item.st_nlink, item.st_size,
+                             item.st_mtime_ns, item.st_ctime_ns)
+    with os.fdopen(descriptor, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+                and identity(before) == identity(expected), "manifest_changed")
+        require(0 < before.st_size <= MAX_MANIFEST_BYTES, "manifest_size")
+        raw = stream.read(MAX_MANIFEST_BYTES + 1)
+        after = os.fstat(stream.fileno())
+    require(len(raw) == before.st_size and identity(before) == identity(after)
+            and identity(after) == identity(path.lstat()), "manifest_changed")
+    return raw
+
+
 def verify_manifest(root: Path, *, filename: str = "manifest.json",
-                    sqlite_names: tuple[str, ...] = (), strict: bool = True) -> dict:
+                    sqlite_names: tuple[str, ...] = (), strict: bool = True,
+                    manifest_sha256: str | None = None) -> dict:
+    if manifest_sha256 is not None:
+        require(type(manifest_sha256) is str and len(manifest_sha256) == 64
+                and all(char in "0123456789abcdef" for char in manifest_sha256),
+                "manifest_pin_shape")
     root = root_directory(root)
     require(len(relative_parts(filename)) == 1, "manifest_filename")
-    manifest_path = safe_file(root, filename)
-    require(manifest_path.stat().st_size <= MAX_MANIFEST_BYTES, "manifest_size")
-    manifest = decode_document(manifest_path.read_bytes())
+    raw = read_manifest(root, filename)
+    observed_sha256 = hashlib.sha256(raw).hexdigest()
+    if manifest_sha256 is not None:
+        require(hmac.compare_digest(observed_sha256, manifest_sha256), "manifest_pin_mismatch")
+    manifest = decode_document(raw)
     require(set(manifest) == {"schema", "version", "file_count", "total_bytes", "files"}
             and manifest["schema"] == SCHEMA and type(manifest["version"]) is int
             and manifest["version"] == 1 and type(manifest["files"]) is list
@@ -202,4 +229,6 @@ def verify_manifest(root: Path, *, filename: str = "manifest.json",
     require(set(sqlite_names) <= set(names), "sqlite_not_in_manifest")
     sqlite_integrity(root, list(sqlite_names))
     return {"verified": True, "files": len(names), "bytes": total,
-            "sqlite_checked": len(sqlite_names), "production_writes": 0}
+            "sqlite_checked": len(sqlite_names), "production_writes": 0,
+            "manifest_sha256": observed_sha256,
+            "manifest_pin_verified": manifest_sha256 is not None}

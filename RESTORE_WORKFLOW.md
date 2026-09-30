@@ -6,7 +6,9 @@ the original disks and running services available for an independent rollback.
 
 1. **Unlock and verify.** Obtain the authorized decryption material from the
    site's secret store. Verify the archive's separately held digest, then run
-   `manifest-verify` and the relevant SQLite integrity checks. Treat an unknown
+   `manifest-verify --manifest-sha256 "$TRUSTED_MANIFEST_SHA256"` and the relevant
+   SQLite integrity checks. Obtain that pin from a separately trusted record,
+   not a file beside the potentially damaged backup. Treat an unknown
    or mismatched result as a stop, not as permission to edit the manifest.
 2. **Identify the target.** Record host, physical ports, disk serials, VM NIC
    order, software versions, IP and cloud/tunnel identities. Never infer a
