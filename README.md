@@ -12,6 +12,7 @@ Python 3.10 or newer is required. From this checkout:
 python3 -m unittest discover -s tests -v
 python3 -m home_net_recovery manifest-create /path/to/isolated-artifacts
 python3 -m home_net_recovery manifest-verify /path/to/isolated-artifacts \
+  --manifest-sha256 "$TRUSTED_MANIFEST_SHA256" \
   --sqlite snapshot/site.sqlite3
 python3 -m home_net_recovery tar-audit /path/to/isolated-backup.tar.gz
 ```
@@ -23,7 +24,14 @@ can run SQLite `PRAGMA integrity_check` against a **standalone snapshot**. An
 active database with WAL must first be captured by the database's supported
 online backup method; checking a copied main file alone can miss committed
 transactions. The manifest authenticates bytes only when its own SHA-256 or
-signature is held separately and verified.
+signature is held separately and verified. `manifest-create` prints the new
+manifest's SHA-256; store that value separately in a trusted location. During
+recovery, `--manifest-sha256` rejects a substituted manifest before following
+its artifact paths. Do not obtain this trusted value from the backup being
+checked. Verification without the option remains available for consistency
+checks and reports `manifest_pin_verified: false`; a self-consistent backup
+alone does not prove its origin. The manifest read is bounded and rejects an
+inode replacement or content change during the read.
 
 `tar-audit` streams and counts every file without extracting it. It rejects
 absolute or parent-traversing paths, links, devices, duplicate paths, sparse
