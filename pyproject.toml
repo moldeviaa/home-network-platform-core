@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "home-net-recovery"
+version = "0.1.0"
+description = "Offline integrity checks for self-hosted recovery artifacts"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [{name = "home-network-platform contributors"}]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+]
+
+[project.scripts]
+home-net-recovery = "home_net_recovery.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["home_net_recovery*"]
