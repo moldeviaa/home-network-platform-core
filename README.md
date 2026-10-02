@@ -1,4 +1,22 @@
-# Home Network Recovery Core
+# Home Network Platform Core
+
+Reusable application authentication, bounded validation and offline recovery
+checks for self-hosted services. This MIT package has no household identity,
+addresses, configuration, credentials or deployment control.
+
+| Package | Public interface |
+| --- | --- |
+| `home_net_auth` | Configured MSAL code flow/PKCE, one-use login state and silent renewal; [authentication contract](AUTHENTICATION.md) |
+| `home_net_validation` | Strict bounded JSON, canonical base64url, RS256 primitives and explicit owned secret-file reads |
+| `home_net_recovery` | Recovery manifest pins, SQLite snapshot integrity and streaming tar audit; existing CLI remains compatible |
+
+Python 3.10+ is supported. Recovery/JSON/base64url checks use only the standard
+library. MSAL and RSA are optional: install the `auth` extra or the hash-locked
+[authentication dependencies](requirements-auth.txt). Tests require those
+dependencies. Each useful public increment is released independently; see
+[contributing](CONTRIBUTING.md) and [changelog](CHANGELOG.md).
+
+## Recovery checks
 
 Offline checks for disaster-recovery artifacts in self-hosted networks. This
 repository contains reusable code and a generic recovery sequence. It has no

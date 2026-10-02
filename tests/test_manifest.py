@@ -5,6 +5,7 @@ import hashlib
 import os
 from pathlib import Path
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -21,7 +22,7 @@ class ManifestTests(unittest.TestCase):
             root = Path(directory)
             (root / "snapshot").mkdir()
             database = root / "snapshot" / "site.sqlite3"
-            with sqlite3.connect(database) as connection:
+            with closing(sqlite3.connect(database)) as connection, connection:
                 connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
                 connection.execute("INSERT INTO sample VALUES (1)")
             (root / "snapshot" / "note.txt").write_bytes(b"ok")
