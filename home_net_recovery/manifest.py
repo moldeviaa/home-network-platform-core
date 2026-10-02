@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+from contextlib import closing
 import stat
 
 
@@ -159,7 +160,7 @@ def sqlite_integrity(root: Path, names: list[str]) -> None:
         require(path.suffix.lower() in (".sqlite", ".sqlite3", ".db"), "sqlite_suffix")
         uri = path.as_uri() + "?mode=ro&immutable=1"
         try:
-            with sqlite3.connect(uri, uri=True) as database:
+            with closing(sqlite3.connect(uri, uri=True)) as database:
                 require(database.execute("PRAGMA integrity_check").fetchall() == [("ok",)],
                         "sqlite_integrity")
         except sqlite3.DatabaseError as exc:
